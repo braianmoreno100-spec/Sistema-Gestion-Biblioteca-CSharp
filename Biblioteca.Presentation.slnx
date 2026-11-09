@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="../Biblioteca.Business/Biblioteca.Business.csproj" Id="5d2df4bd-5159-49bc-8338-41362144868e" />
+  <Project Path="../Biblioteca.Data/Biblioteca.Data.csproj" Id="6f305af3-7408-44b1-9f13-de287b78450b" />
+  <Project Path="../Biblioteca.Domain/Biblioteca.Domain.csproj" Id="d4266d9a-a903-4d96-9636-33db74ec373e" />
+  <Project Path="Biblioteca.Presentation.csproj" />
+</Solution>
