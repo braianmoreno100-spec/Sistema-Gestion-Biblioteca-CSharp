@@ -1,5 +1,6 @@
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -12,15 +13,29 @@ namespace Biblioteca.Presentation
     {
         private readonly LibroService _libroService = new();
         private readonly EditorialService _editorialService = new();
+        private readonly AutorService _autorService = new();
 
-        private int _libroSeleccionadoID = 0;
-        private bool _cargandoLibros = false;
+        private readonly Color azul =
+            Color.FromArgb(38, 78, 133);
+
+        private readonly Color fondo =
+            Color.FromArgb(245, 248, 252);
 
         private readonly TextBox txtBuscarLibro = new();
         private readonly ComboBox cboEditorial = new();
 
-        private readonly Color azul = Color.FromArgb(38, 78, 133);
-        private readonly Color fondo = Color.FromArgb(245, 248, 252);
+        // NUEVO: BUSCADOR Y SELECCIÓN DE AUTORES
+        private readonly TextBox txtBuscarAutor = new();
+        private readonly CheckedListBox listaAutores = new();
+        private readonly Label lblAutoresSeleccionados = new();
+        private readonly Label lblResultadosAutores = new();
+
+        private readonly List<AutorOpcion> _todosAutores = new();
+        private readonly HashSet<int> _autoresSeleccionados = new();
+
+        private int _libroSeleccionadoID = 0;
+        private bool _cargandoLibros = false;
+        private bool _actualizandoListaAutores = false;
 
         public Form1()
         {
@@ -43,7 +58,13 @@ namespace Biblioteca.Presentation
                 dgvLibros_SelectionChanged;
 
             txtBuscarLibro.TextChanged +=
-                (sender, e) => CargarLibros();
+                (s, e) => CargarLibros();
+
+            txtBuscarAutor.TextChanged +=
+                (s, e) => FiltrarAutores();
+
+            listaAutores.ItemCheck +=
+                ListaAutores_ItemCheck;
 
             Load += Formulario_Load;
         }
@@ -53,22 +74,21 @@ namespace Biblioteca.Presentation
             Text = "Biblioteca | Gestión de Libros";
             BackColor = fondo;
             Font = new Font("Segoe UI", 10F);
-            MinimumSize = new Size(1050, 720);
-            Size = new Size(1250, 780);
+            Size = new Size(1300, 900);
+            MinimumSize = new Size(1050, 800);
             StartPosition = FormStartPosition.CenterScreen;
 
-            // Ocultar etiquetas originales.
+            // OCULTAR ETIQUETAS ANTIGUAS
             foreach (Control control in Controls)
             {
                 if (control is Label)
                     control.Visible = false;
             }
 
-            // Ocultar campo de ID de editorial.
             txtEditorialID.Visible = false;
 
-            // Encabezado.
-            Panel encabezado = new Panel
+            // ENCABEZADO
+            var encabezado = new Panel
             {
                 Dock = DockStyle.Top,
                 Height = 85,
@@ -78,7 +98,7 @@ namespace Biblioteca.Presentation
             Controls.Add(encabezado);
             encabezado.BringToFront();
 
-            Label titulo = new Label
+            encabezado.Controls.Add(new Label
             {
                 Text = "GESTIÓN DE LIBROS",
                 Font = new Font(
@@ -86,21 +106,18 @@ namespace Biblioteca.Presentation
                 ForeColor = Color.White,
                 AutoSize = true,
                 Location = new Point(30, 12)
-            };
+            });
 
-            Label subtitulo = new Label
+            encabezado.Controls.Add(new Label
             {
                 Text = "Administración del catálogo bibliográfico",
                 Font = new Font("Segoe UI", 10F),
                 ForeColor = Color.FromArgb(220, 232, 248),
                 AutoSize = true,
                 Location = new Point(32, 53)
-            };
+            });
 
-            encabezado.Controls.Add(titulo);
-            encabezado.Controls.Add(subtitulo);
-
-            // Distribución de campos.
+            // CAMPOS DEL LIBRO
             ConfigurarCampo(
                 "TÍTULO DEL LIBRO", txtTitulo, 30, 105);
 
@@ -125,51 +142,167 @@ namespace Biblioteca.Presentation
 
             Controls.Add(cboEditorial);
 
-            // Botones.
+            // BOTONES PRINCIPALES
             EstilizarBoton(
-                btnGuardar, "GUARDAR",
+                btnGuardar,
+                "GUARDAR",
                 Color.FromArgb(35, 105, 75));
 
             EstilizarBoton(
-                btnEditar, "EDITAR", azul);
+                btnEditar,
+                "EDITAR",
+                azul);
 
             EstilizarBoton(
-                btnEliminar, "ELIMINAR",
+                btnEliminar,
+                "ELIMINAR",
                 Color.FromArgb(170, 55, 65));
 
             btnGuardar.Location = new Point(930, 127);
             btnEditar.Location = new Point(930, 192);
             btnEliminar.Location = new Point(930, 257);
 
-            // Buscador.
-            Label lblBuscar = new Label
+            // SECCIÓN AUTORES
+            var lblAutores = new Label
+            {
+                Text = "AUTORES DEL LIBRO",
+                Font = new Font(
+                    "Segoe UI", 10F, FontStyle.Bold),
+                ForeColor = azul,
+                AutoSize = true,
+                Location = new Point(30, 320)
+            };
+
+            Controls.Add(lblAutores);
+
+            // BUSCADOR DE AUTORES
+            txtBuscarAutor.PlaceholderText =
+                "Buscar autor por nombre, apellido o país...";
+
+            txtBuscarAutor.Location =
+                new Point(30, 350);
+
+            txtBuscarAutor.Size =
+                new Size(580, 30);
+
+            txtBuscarAutor.BorderStyle =
+                BorderStyle.FixedSingle;
+
+            Controls.Add(txtBuscarAutor);
+
+            var btnLimpiarFiltro = new Button
+            {
+                Text = "LIMPIAR FILTRO",
+                Location = new Point(625, 348),
+                Size = new Size(140, 34),
+                BackColor = Color.FromArgb(95, 105, 120),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+
+            btnLimpiarFiltro.FlatAppearance.BorderSize = 0;
+
+            btnLimpiarFiltro.Click += (s, e) =>
+            {
+                txtBuscarAutor.Clear();
+            };
+
+            Controls.Add(btnLimpiarFiltro);
+
+            // LISTA DE AUTORES
+            listaAutores.Location = new Point(30, 390);
+            listaAutores.Size = new Size(855, 110);
+            listaAutores.CheckOnClick = true;
+            listaAutores.BorderStyle =
+                BorderStyle.FixedSingle;
+
+            listaAutores.Font =
+                new Font("Segoe UI", 10F);
+
+            Controls.Add(listaAutores);
+
+            // CONTADORES
+            lblAutoresSeleccionados.Location =
+                new Point(30, 510);
+
+            lblAutoresSeleccionados.AutoSize = true;
+            lblAutoresSeleccionados.ForeColor = azul;
+
+            Controls.Add(lblAutoresSeleccionados);
+
+            lblResultadosAutores.Location =
+                new Point(300, 510);
+
+            lblResultadosAutores.AutoSize = true;
+            lblResultadosAutores.ForeColor =
+                Color.FromArgb(80, 90, 105);
+
+            Controls.Add(lblResultadosAutores);
+
+            // DESMARCAR TODOS
+            var btnDesmarcar = new Button
+            {
+                Text = "DESMARCAR TODOS",
+                Location = new Point(690, 505),
+                Size = new Size(195, 35),
+                BackColor = Color.FromArgb(170, 55, 65),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+
+            btnDesmarcar.FlatAppearance.BorderSize = 0;
+
+            btnDesmarcar.Click += (s, e) =>
+            {
+                if (_autoresSeleccionados.Count == 0)
+                    return;
+
+                if (MessageBox.Show(
+                    "¿Deseas desmarcar todos los autores?",
+                    "Confirmar",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question)
+                    != DialogResult.Yes)
+                    return;
+
+                _autoresSeleccionados.Clear();
+                FiltrarAutores();
+            };
+
+            Controls.Add(btnDesmarcar);
+
+            // BUSCADOR DE LIBROS
+            var lblBuscarLibro = new Label
             {
                 Text = "BUSCAR LIBRO",
                 Font = new Font(
                     "Segoe UI", 10F, FontStyle.Bold),
                 ForeColor = azul,
                 AutoSize = true,
-                Location = new Point(30, 325)
+                Location = new Point(30, 560)
             };
 
-            txtBuscarLibro.Name = "txtBuscarLibro";
+            Controls.Add(lblBuscarLibro);
+
             txtBuscarLibro.PlaceholderText =
                 "Buscar por título o ISBN...";
-            txtBuscarLibro.Font =
-                new Font("Segoe UI", 10F);
+
             txtBuscarLibro.Location =
-                new Point(175, 320);
+                new Point(175, 555);
+
             txtBuscarLibro.Size =
                 new Size(370, 30);
 
-            Controls.Add(lblBuscar);
             Controls.Add(txtBuscarLibro);
 
-            // Tabla.
-            dgvLibros.Location = new Point(30, 375);
+            // TABLA DE LIBROS
+            dgvLibros.Location = new Point(30, 610);
+
             dgvLibros.Size = new Size(
                 ClientSize.Width - 60,
-                ClientSize.Height - 405);
+                ClientSize.Height - 640);
 
             dgvLibros.Anchor =
                 AnchorStyles.Top |
@@ -192,8 +325,10 @@ namespace Biblioteca.Presentation
                     "Segoe UI", 10F, FontStyle.Bold);
 
             dgvLibros.ColumnHeadersHeight = 42;
+
             dgvLibros.ColumnHeadersHeightSizeMode =
-                DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+                DataGridViewColumnHeadersHeightSizeMode
+                    .DisableResizing;
 
             dgvLibros.DefaultCellStyle.Font =
                 new Font("Segoe UI", 10F);
@@ -208,6 +343,7 @@ namespace Biblioteca.Presentation
                 Color.FromArgb(244, 248, 253);
 
             dgvLibros.RowTemplate.Height = 34;
+
             dgvLibros.AutoSizeColumnsMode =
                 DataGridViewAutoSizeColumnsMode.Fill;
 
@@ -215,9 +351,12 @@ namespace Biblioteca.Presentation
         }
 
         private void ConfigurarCampo(
-            string texto, Control campo, int x, int y)
+            string texto,
+            Control campo,
+            int x,
+            int y)
         {
-            Label etiqueta = new Label
+            var etiqueta = new Label
             {
                 Text = texto,
                 Font = new Font(
@@ -238,7 +377,9 @@ namespace Biblioteca.Presentation
         }
 
         private void EstilizarBoton(
-            Button boton, string texto, Color color)
+            Button boton,
+            string texto,
+            Color color)
         {
             boton.Text = texto;
             boton.BackColor = color;
@@ -252,17 +393,19 @@ namespace Biblioteca.Presentation
         }
 
         private void Formulario_Load(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
             CargarEditoriales();
+            CargarAutores();
             CargarLibros();
         }
 
-        // Conserva el evento del diseñador.
+        // EVENTO DEL DISEÑADOR
         private void Form1_Load(
-            object sender, EventArgs e)
+            object sender,
+            EventArgs e)
         {
-            // La carga se realiza en Formulario_Load.
         }
 
         private void CargarEditoriales()
@@ -280,10 +423,168 @@ namespace Biblioteca.Presentation
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Error al cargar editoriales: " +
+                MostrarError(ex.Message);
+            }
+        }
+
+        // CARGAR TODOS LOS AUTORES
+        private void CargarAutores()
+        {
+            try
+            {
+                _todosAutores.Clear();
+
+                var autores =
+                    _autorService.ObtenerAutores();
+
+                foreach (var autor in autores)
+                {
+                    _todosAutores.Add(new AutorOpcion
+                    {
+                        AutorID = autor.AutorID,
+                        Nombre = autor.Nombre ?? "",
+                        Apellido = autor.Apellido ?? "",
+                        Pais = autor.Pais ?? ""
+                    });
+                }
+
+                FiltrarAutores();
+            }
+            catch (Exception ex)
+            {
+                MostrarError(
+                    "Error al cargar autores: " +
                     ex.Message);
             }
+        }
+
+        // FILTRAR SIN PERDER SELECCIONES
+        private void FiltrarAutores()
+        {
+            string busqueda =
+                txtBuscarAutor.Text.Trim();
+
+            var filtrados = _todosAutores
+                .Where(a =>
+                    string.IsNullOrWhiteSpace(busqueda)
+                    ||
+                    a.Nombre.Contains(
+                        busqueda,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    a.Apellido.Contains(
+                        busqueda,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    a.Pais.Contains(
+                        busqueda,
+                        StringComparison.OrdinalIgnoreCase)
+                    ||
+                    a.NombreCompleto.Contains(
+                        busqueda,
+                        StringComparison.OrdinalIgnoreCase))
+                .OrderBy(a => a.Apellido)
+                .ThenBy(a => a.Nombre)
+                .ToList();
+
+            _actualizandoListaAutores = true;
+
+            try
+            {
+                listaAutores.BeginUpdate();
+                listaAutores.Items.Clear();
+
+                foreach (var autor in filtrados)
+                {
+                    bool marcado =
+                        _autoresSeleccionados.Contains(
+                            autor.AutorID);
+
+                    listaAutores.Items.Add(
+                        autor, marcado);
+                }
+            }
+            finally
+            {
+                listaAutores.EndUpdate();
+                _actualizandoListaAutores = false;
+            }
+
+            ActualizarContadores(filtrados.Count);
+        }
+
+        // REGISTRAR CAMBIO DE CASILLA
+        private void ListaAutores_ItemCheck(
+            object? sender,
+            ItemCheckEventArgs e)
+        {
+            if (_actualizandoListaAutores)
+                return;
+
+            if (listaAutores.Items[e.Index]
+                is not AutorOpcion autor)
+                return;
+
+            if (e.NewValue == CheckState.Checked)
+            {
+                _autoresSeleccionados.Add(
+                    autor.AutorID);
+            }
+            else
+            {
+                _autoresSeleccionados.Remove(
+                    autor.AutorID);
+            }
+
+            ActualizarContadores(
+                listaAutores.Items.Count);
+        }
+
+        private void ActualizarContadores(
+            int resultados)
+        {
+            int cantidad =
+                _autoresSeleccionados.Count;
+
+            lblAutoresSeleccionados.Text =
+                cantidad == 1
+                    ? "1 autor seleccionado"
+                    : $"{cantidad} autores seleccionados";
+
+            lblResultadosAutores.Text =
+                resultados == 1
+                    ? "1 resultado encontrado"
+                    : $"{resultados} resultados encontrados";
+        }
+
+        private List<int> ObtenerAutoresSeleccionados()
+        {
+            return _autoresSeleccionados.ToList();
+        }
+
+        // MOSTRAR AUTORES DE UN LIBRO EXISTENTE
+        private void SeleccionarAutoresDelLibro(
+            int libroID)
+        {
+            var ids =
+                _libroService.ObtenerAutoresPorLibro(
+                    libroID);
+
+            _autoresSeleccionados.Clear();
+
+            foreach (int id in ids)
+            {
+                _autoresSeleccionados.Add(id);
+            }
+
+            FiltrarAutores();
+        }
+
+        private void LimpiarAutores()
+        {
+            _autoresSeleccionados.Clear();
+            txtBuscarAutor.Clear();
+            FiltrarAutores();
         }
 
         private void CargarLibros()
@@ -301,12 +602,12 @@ namespace Biblioteca.Presentation
                 if (!string.IsNullOrWhiteSpace(busqueda))
                 {
                     libros = libros
-                        .Where(libro =>
-                            (libro.Titulo ?? "").Contains(
+                        .Where(l =>
+                            (l.Titulo ?? "").Contains(
                                 busqueda,
                                 StringComparison.OrdinalIgnoreCase)
                             ||
-                            (libro.ISBN ?? "").Contains(
+                            (l.ISBN ?? "").Contains(
                                 busqueda,
                                 StringComparison.OrdinalIgnoreCase))
                         .ToList();
@@ -314,15 +615,15 @@ namespace Biblioteca.Presentation
 
                 dgvLibros.DataSource = null;
                 dgvLibros.DataSource = libros;
-
                 dgvLibros.ClearSelection();
+
                 _libroSeleccionadoID = 0;
 
                 ConfigurarColumnas();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
+                MostrarError(
                     "Error al cargar libros: " +
                     ex.Message);
             }
@@ -334,33 +635,26 @@ namespace Biblioteca.Presentation
 
         private void ConfigurarColumnas()
         {
-            CambiarTituloColumna(
-                "LibroID", "ID");
-
-            CambiarTituloColumna(
-                "Titulo", "TÍTULO");
-
-            CambiarTituloColumna(
-                "ISBN", "ISBN");
-
+            CambiarTituloColumna("LibroID", "ID");
+            CambiarTituloColumna("Titulo", "TÍTULO");
+            CambiarTituloColumna("ISBN", "ISBN");
             CambiarTituloColumna(
                 "EditorialID", "EDITORIAL ID");
-
             CambiarTituloColumna(
                 "AnioPublicacion", "AÑO");
-
             CambiarTituloColumna(
                 "TotalEjemplares", "TOTAL");
-
             CambiarTituloColumna(
                 "EjemplaresDisponibles", "DISPONIBLES");
         }
 
         private void CambiarTituloColumna(
-            string nombre, string titulo)
+            string nombre,
+            string titulo)
         {
             if (dgvLibros.Columns.Contains(nombre))
-                dgvLibros.Columns[nombre].HeaderText = titulo;
+                dgvLibros.Columns[nombre].HeaderText =
+                    titulo;
         }
 
         private Libro ObtenerDatosFormulario()
@@ -383,11 +677,12 @@ namespace Biblioteca.Presentation
             }
 
             if (!int.TryParse(
-                txtTotal.Text, out int total) ||
-                total < 0)
+                txtTotal.Text,
+                out int total) ||
+                total < 1)
             {
                 throw new Exception(
-                    "El total de ejemplares no es válido.");
+                    "El total de ejemplares debe ser mayor que cero.");
             }
 
             if (!int.TryParse(
@@ -402,13 +697,14 @@ namespace Biblioteca.Presentation
 
             int? anio = null;
 
-            if (!string.IsNullOrWhiteSpace(txtAnio.Text))
+            if (!string.IsNullOrWhiteSpace(
+                txtAnio.Text))
             {
                 if (!int.TryParse(
                     txtAnio.Text,
                     out int valorAnio) ||
-                    valorAnio < 1450 ||
-                    valorAnio > DateTime.Now.Year + 1)
+                    valorAnio < 1 ||
+                    valorAnio > DateTime.Now.Year)
                 {
                     throw new Exception(
                         "El año de publicación no es válido.");
@@ -430,16 +726,24 @@ namespace Biblioteca.Presentation
         }
 
         private void btnGuardar_Click(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
             try
             {
-                Libro libro = ObtenerDatosFormulario();
+                var libro = ObtenerDatosFormulario();
+                var autores = ObtenerAutoresSeleccionados();
 
-                _libroService.RegistrarLibro(libro);
+                if (autores.Count == 0)
+                    throw new Exception(
+                        "Selecciona al menos un autor.");
+
+                int nuevoID =
+                    _libroService.RegistrarLibroConAutores(
+                        libro, autores);
 
                 MessageBox.Show(
-                    "Libro registrado correctamente.",
+                    $"Libro registrado correctamente. ID: {nuevoID}",
                     "Registro exitoso",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -449,31 +753,34 @@ namespace Biblioteca.Presentation
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Error al guardar: " + ex.Message);
+                MostrarError(
+                    "Error al guardar: " +
+                    ex.Message);
             }
         }
 
         private void btnEditar_Click(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
             try
             {
                 if (_libroSeleccionadoID <= 0)
-                {
-                    MessageBox.Show(
+                    throw new Exception(
                         "Primero selecciona un libro.");
-                    return;
-                }
 
-                Libro libro = ObtenerDatosFormulario();
+                var libro = ObtenerDatosFormulario();
+                var autores = ObtenerAutoresSeleccionados();
 
-                libro.LibroID = _libroSeleccionadoID;
+                if (autores.Count == 0)
+                    throw new Exception(
+                        "Selecciona al menos un autor.");
 
-                _libroService.ActualizarLibro(libro);
+                _libroService.ActualizarLibroConAutores(
+                    libro, autores);
 
                 MessageBox.Show(
-                    "Libro actualizado correctamente.",
+                    "Libro y autores actualizados correctamente.",
                     "Actualización exitosa",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -483,31 +790,31 @@ namespace Biblioteca.Presentation
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Error al editar: " + ex.Message);
+                MostrarError(
+                    "Error al editar: " +
+                    ex.Message);
             }
         }
 
         private void btnEliminar_Click(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
             try
             {
                 if (_libroSeleccionadoID <= 0)
-                {
-                    MessageBox.Show(
+                    throw new Exception(
                         "Primero selecciona un libro.");
-                    return;
-                }
 
-                DialogResult respuesta = MessageBox.Show(
+                if (MessageBox.Show(
                     "¿Deseas eliminar este libro?",
                     "Confirmar eliminación",
                     MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-
-                if (respuesta != DialogResult.Yes)
+                    MessageBoxIcon.Question)
+                    != DialogResult.Yes)
+                {
                     return;
+                }
 
                 _libroService.EliminarLibro(
                     _libroSeleccionadoID);
@@ -520,13 +827,15 @@ namespace Biblioteca.Presentation
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Error al eliminar: " + ex.Message);
+                MostrarError(
+                    "Error al eliminar: " +
+                    ex.Message);
             }
         }
 
         private void dgvLibros_SelectionChanged(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
             if (_cargandoLibros)
                 return;
@@ -537,8 +846,7 @@ namespace Biblioteca.Presentation
                 return;
             }
 
-            DataGridViewRow fila =
-                dgvLibros.SelectedRows[0];
+            var fila = dgvLibros.SelectedRows[0];
 
             if (fila.DataBoundItem is not Libro libro)
                 return;
@@ -559,6 +867,18 @@ namespace Biblioteca.Presentation
 
             txtDisponibles.Text =
                 libro.EjemplaresDisponibles.ToString();
+
+            try
+            {
+                SeleccionarAutoresDelLibro(
+                    libro.LibroID);
+            }
+            catch (Exception ex)
+            {
+                MostrarError(
+                    "Error al consultar autores: " +
+                    ex.Message);
+            }
         }
 
         private void LimpiarCampos()
@@ -573,11 +893,24 @@ namespace Biblioteca.Presentation
 
             _libroSeleccionadoID = 0;
             dgvLibros.ClearSelection();
+
+            LimpiarAutores();
         }
 
-        // Eventos antiguos del diseñador.
+        private static void MostrarError(
+            string mensaje)
+        {
+            MessageBox.Show(
+                mensaje,
+                "Aviso",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        // EVENTOS ANTIGUOS DEL DISEÑADOR
         private void label1_Click(
-            object? sender, EventArgs e)
+            object? sender,
+            EventArgs e)
         {
         }
 
@@ -585,6 +918,26 @@ namespace Biblioteca.Presentation
             object? sender,
             DataGridViewCellEventArgs e)
         {
+        }
+
+        // MODELO PARA MOSTRAR AUTORES
+        private sealed class AutorOpcion
+        {
+            public int AutorID { get; set; }
+
+            public string Nombre { get; set; } = "";
+            public string Apellido { get; set; } = "";
+            public string Pais { get; set; } = "";
+
+            public string NombreCompleto =>
+                $"{Nombre} {Apellido}".Trim();
+
+            public override string ToString()
+            {
+                return string.IsNullOrWhiteSpace(Pais)
+                    ? NombreCompleto
+                    : $"{NombreCompleto} — {Pais}";
+            }
         }
     }
 }
