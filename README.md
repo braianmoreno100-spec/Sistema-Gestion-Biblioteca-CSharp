@@ -184,3 +184,70 @@ Desde el menú principal es posible acceder a:
 NOTA: Para utilizar la aplicación, SQL Server debe
 estar instalado, configurado y accesible.
 
+
+
+
+## Cómo ejecutar el proyecto paso a paso
+
+### Requisitos
+- Windows 10 u 11.
+- Visual Studio con desarrollo de escritorio .NET.
+- .NET 8 SDK.
+- SQL Server 2022.
+- SQL Server Management Studio (SSMS).
+
+### 1. Descargar el proyecto
+Descargar el ZIP desde GitHub y extraerlo en una carpeta.
+
+### 2. Preparar la base de datos
+1. Abrir SQL Server Management Studio.
+2. Conectarse a la instancia de SQL Server.
+3. Abrir el archivo `database/BibliotecaDB.sql`.
+4. Revisar y ejecutar el script para crear la base de datos.
+5. Confirmar que exista `BibliotecaDB`.
+
+### 3. Configurar la conexión
+Abrir:
+
+`Biblioteca.Data/Database/ConnectionFactory.cs`
+
+Verificar que el nombre del servidor corresponda
+a la instancia local de SQL Server.
+
+La conexión utiliza autenticación de Windows.
+
+### 4. Abrir la solución
+1. Abrir Visual Studio.
+2. Seleccionar "Abrir un proyecto o una solución".
+3. Abrir:
+   `Biblioteca.Presentation/Biblioteca.Presentation.slnx`
+4. Esperar a que se carguen los cuatro proyectos.
+
+### 5. Seleccionar el proyecto de inicio
+IMPORTANTE:
+
+1. Abrir el Explorador de soluciones.
+2. Hacer clic derecho en `Biblioteca.Presentation`.
+3. Seleccionar "Establecer como proyecto de inicio".
+
+No ejecutar Biblioteca.Domain, Biblioteca.Data o
+Biblioteca.Business directamente, ya que son
+bibliotecas de clases.
+
+### 6. Compilar y ejecutar
+1. Presionar Ctrl + Shift + B para compilar.
+2. Verificar que no existan errores.
+3. Presionar F5 para ejecutar.
+4. Se abrirá el menú principal del sistema.
+
+### 7. Utilizar el sistema
+Desde el menú principal es posible acceder a:
+
+- Gestión de libros y autores.
+- Gestión de editoriales.
+- Gestión de usuarios.
+- Préstamos y devoluciones.
+- Dashboard de analítica y reportes.
+
+NOTA: Para utilizar la aplicación, SQL Server debe
+estar instalado, configurado y accesible.
