@@ -111,7 +111,6 @@ de Windows. No incluye un sistema de autenticación de
 usuarios de la aplicación ni despliegue web.
 
 ## Autoría
-Nombre: Braian Stiven Moreno Marquez
 
 Proyecto académico de Programación Avanzada, 2026.
 
